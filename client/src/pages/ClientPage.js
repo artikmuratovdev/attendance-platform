@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import { API } from '../config';
+import { BrowserQRCodeReader, IScannerControls } from '@zxing/browser';
 
 function Card({ children, style = {} }) {
   return (
@@ -52,76 +53,138 @@ function Input({ label, value, onChange, placeholder, mono = false, large = fals
 
 function QRScanner({ onScan, disabled }) {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const intervalRef = useRef(null);
+  const controlsRef = useRef(null);
   const [active, setActive] = useState(false);
   const [err, setErr] = useState('');
 
   const start = async () => {
     setErr('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      const codeReader = new BrowserQRCodeReader();
+      const devices = await BrowserQRCodeReader.listVideoInputDevices();
+
+      if (!devices || devices.length === 0) {
+        setErr('Kamera topilmadi.');
+        return;
+      }
+
+      // Orqa kamerani afzal ko'rish
+      const device = devices.find(d =>
+        d.label.toLowerCase().includes('back') ||
+        d.label.toLowerCase().includes('rear') ||
+        d.label.toLowerCase().includes('environment')
+      ) || devices[devices.length - 1];
+
       setActive(true);
 
-      intervalRef.current = setInterval(() => {
-        const v = videoRef.current;
-        const c = canvasRef.current;
-        if (!v || v.readyState < 2 || v.videoWidth === 0) return;
-
-        c.width = v.videoWidth;
-        c.height = v.videoHeight;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(v, 0, 0);
-
-        // 1-usul: BarcodeDetector (yangi Chrome)
-        if ('BarcodeDetector' in window) {
-          new window.BarcodeDetector({ formats: ['qr_code'] })
-            .detect(c)
-            .then(results => {
-              if (results.length > 0) {
-                try { onScan(JSON.parse(results[0].rawValue)); stop(); } catch {}
+      controlsRef.current = await codeReader.decodeFromVideoDevice(
+        device.deviceId,
+        videoRef.current,
+        (result, error) => {
+          if (result) {
+            try {
+              const parsed = JSON.parse(result.getText());
+              if (parsed.sessionId && parsed.otp) {
+                onScan(parsed);
+                stop();
               }
-            })
-            .catch(() => {}); // BarcodeDetector xatosini jimgina o'tkazib yubor
-        }
-        // 2-usul: jsQR fallback (barcha Android uchun)
-        else if (window.jsQR) {
-          const imageData = ctx.getImageData(0, 0, c.width, c.height);
-          const code = window.jsQR(imageData.data, imageData.width, imageData.height);
-          if (code) {
-            try { onScan(JSON.parse(code.data)); stop(); } catch {}
+            } catch {}
           }
         }
-      }, 500);
-
+      );
     } catch (e) {
-      if (e.name === 'NotAllowedError') {
-        setErr('Kamera ruxsati rad etildi. Sozlamalardan ruxsat bering.');
-      } else if (e.name === 'NotFoundError') {
-        setErr('Kamera topilmadi.');
-      } else {
-        setErr(`Kamera xatosi: ${e.message}`);
-      }
+      setErr('Kamera ruxsati berilmadi yoki xatolik: ' + e.message);
+      setActive(false);
     }
   };
 
   const stop = () => {
-    videoRef.current?.srcObject?.getTracks().forEach(t => t.stop());
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+      controlsRef.current = null;
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+    }
     setActive(false);
   };
 
   useEffect(() => () => stop(), []);
 
-  // ... JSX qismi o'zgarishsiz qoladi
+  return (
+    <div>
+      {active && (
+        <div style={{
+          position: 'relative', marginBottom: '1rem',
+          borderRadius: 12, overflow: 'hidden',
+          border: '1px solid var(--border2)',
+        }}>
+          <video
+            ref={videoRef}
+            style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
+            playsInline
+            muted
+          />
+          {/* Scan frame */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <div style={{ width: 180, height: 180, position: 'relative' }}>
+              {/* 4 burchak */}
+              {[
+                { top: 0, left: 0, borderTop: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '4px 0 0 0' },
+                { top: 0, right: 0, borderTop: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 4px 0 0' },
+                { bottom: 0, left: 0, borderBottom: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '0 0 0 4px' },
+                { bottom: 0, right: 0, borderBottom: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 0 4px 0' },
+              ].map((style, i) => (
+                <div key={i} style={{ position: 'absolute', width: 28, height: 28, ...style }} />
+              ))}
+              {/* Scan line */}
+              <div style={{
+                position: 'absolute', left: 0, right: 0, height: 2,
+                background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
+                animation: 'scanLine 1.8s linear infinite',
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {err && (
+        <div style={{
+          color: 'var(--red)', fontSize: '0.85rem', marginBottom: '0.75rem',
+          padding: '10px', background: 'var(--red-dim)', borderRadius: 8,
+          border: '1px solid rgba(255,92,92,0.2)',
+        }}>{err}</div>
+      )}
+
+      <button
+        onClick={active ? stop : start}
+        disabled={!active && disabled}
+        style={{
+          width: '100%', padding: '13px', borderRadius: '10px',
+          background: active ? 'var(--surface3)' : 'linear-gradient(135deg, #3b74e8, #6d4afe)',
+          color: '#fff', fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.95rem',
+          cursor: (!active && disabled) ? 'not-allowed' : 'pointer',
+          opacity: (!active && disabled) ? 0.5 : 1, transition: 'all 0.2s',
+          border: active ? '1px solid var(--border2)' : 'none',
+        }}
+      >
+        {active ? '⏹ Kamerani o\'chirish' : '📷 Kamerani yoqish'}
+      </button>
+
+      {!active && disabled && (
+        <div style={{
+          marginTop: 8, fontSize: '11px', fontFamily: 'var(--mono)',
+          color: 'var(--text3)', textAlign: 'center',
+        }}>
+          Avval Session ID va ismni kiriting
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SuccessScreen({ student, onReset }) {
