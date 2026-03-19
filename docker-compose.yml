@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  server:
+    build: ./server
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+    restart: unless-stopped
+
+  client:
+    build: ./client
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    restart: unless-stopped
