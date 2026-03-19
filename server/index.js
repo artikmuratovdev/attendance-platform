@@ -37,7 +37,7 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Routes
-app.use('/api/session', sessionRoutes);
+app.use('/api', sessionRoutes);
 
 // Socket — io ni handlerlarga uzatish
 registerSocketHandlers(io);
