@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ThemeToggle";
 import { API } from "../config";
-import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
+import { BrowserQRCodeReader } from "@zxing/browser";
 
 function Card({ children, style = {} }) {
   return (

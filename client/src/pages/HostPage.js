@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
 import ThemeToggle from "../components/ThemeToggle";
-import { API, SOCKET } from '../config';
+import { API, SOCKET } from "../config";
 
 function Tag({ children, color = "var(--accent)", dim = "var(--accent-dim)" }) {
   return (
@@ -528,7 +528,13 @@ export default function HostPage() {
       setQrData(q);
       startTick(r);
     });
+    socket.on("students:sync", ({ students }) => {
+      setStudents(students);
+    });
     socket.on("student:joined", (s) => setStudents((prev) => [s, ...prev]));
+    socket.on("student:left", ({ studentId }) => {
+      setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    });
   };
 
   useEffect(

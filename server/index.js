@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 
+const { connectDB } = require('./config/database');
 const { createSocketServer } = require('./config/socket');
 const { registerSocketHandlers } = require('./socket/handlers');
 const sessionRoutes = require('./routes/session');
@@ -11,16 +12,13 @@ const app = express();
 const server = http.createServer(app);
 const io = createSocketServer(server);
 
-const allowedOrigins = (process.env.CLIENT_URL)
-.split(',')
-.map(u => u.trim())
-.filter(Boolean);
+const allowedOrigins = (process.env.CLIENT_URL || '*')
+  .split(',').map(u => u.trim()).filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Postman yoki server-to-server uchun origin yo'q bo'lishi mumkin
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error(`CORS blocked: ${origin}`));
@@ -31,22 +29,23 @@ const corsOptions = {
   credentials: true,
 };
 
-// Middleware
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', 'true');
+  res.setHeader('bypass-tunnel-reminder', 'true');
+  next();
+});
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Routes
-app.use('/api', sessionRoutes);
-
-// Socket — io ni handlerlarga uzatish
-registerSocketHandlers(io);
-
-// Student qo'shilganda hostga xabar berish (routes ichidan io kerak)
-// io ni global qilish o'rniga req ga ulaymiz
+app.use('/api/session', sessionRoutes);
 app.set('io', io);
 
-const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`[SERVER] Running on port ${PORT}`));
+registerSocketHandlers(io);
+
+// DB ga ulanib keyin serverni ishga tushir
+connectDB().then(() => {
+  const PORT = process.env.PORT || 4000;
+  server.listen(PORT, () => console.log(`[SERVER] Running on port ${PORT}`));
+});

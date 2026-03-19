@@ -1,20 +1,65 @@
-const sessions = {};
+const Session = require('../models/Session');
 
-function getSession(sessionId) {
-  return sessions[sessionId];
+async function getSession(sessionId) {
+  return await Session.findOne({ sessionId, active: true });
 }
 
-function createSession(sessionId, data) {
-  sessions[sessionId] = data;
-  return sessions[sessionId];
+async function createSession(sessionId, data) {
+  const session = new Session({ sessionId, ...data });
+  await session.save();
+  return session;
 }
 
-function deleteSession(sessionId) {
-  delete sessions[sessionId];
+async function updateSession(sessionId, update) {
+  return await Session.findOneAndUpdate(
+    { sessionId },
+    { $set: update },
+    { new: true }
+  );
 }
 
-function getAllSessions() {
-  return sessions;
+async function addStudent(sessionId, student) {
+  return await Session.findOneAndUpdate(
+    { sessionId },
+    { $push: { students: student } },
+    { new: true }
+  );
 }
 
-module.exports = { getSession, createSession, deleteSession, getAllSessions };
+async function removeStudent(sessionId, studentId) {
+  return await Session.findOneAndUpdate(
+    { sessionId },
+    { $pull: { students: { id: studentId } } },
+    { new: true }
+  );
+}
+
+async function setStudentOnline(sessionId, studentId, online) {
+  return await Session.findOneAndUpdate(
+    { sessionId, 'students.id': studentId },
+    { $set: { 'students.$.online': online } },
+    { new: true }
+  );
+}
+
+async function deleteSession(sessionId) {
+  return await Session.findOneAndUpdate(
+    { sessionId },
+    { $set: { active: false } }
+  );
+}
+
+async function getAllSessions() {
+  return await Session.find({ active: true });
+}
+
+module.exports = {
+  getSession,
+  createSession,
+  updateSession,
+  addStudent,
+  removeStudent,
+  setStudentOnline,
+  deleteSession,
+  getAllSessions,
+};
