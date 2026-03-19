@@ -56,126 +56,142 @@ function QRScanner({ onScan, disabled }) {
   const controlsRef = useRef(null);
   const [active, setActive] = useState(false);
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const stop = () => {
+    try {
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
+      }
+    } catch {}
+    try {
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+        videoRef.current.srcObject = null;
+      }
+    } catch {}
+    setActive(false);
+    setLoading(false);
+  };
 
   const start = async () => {
+    if (loading) return;
     setErr('');
+    setLoading(true);
     try {
+      const { BrowserQRCodeReader } = await import('@zxing/browser');
       const codeReader = new BrowserQRCodeReader();
       const devices = await BrowserQRCodeReader.listVideoInputDevices();
 
       if (!devices || devices.length === 0) {
         setErr('Kamera topilmadi.');
+        setLoading(false);
         return;
       }
 
-      // Orqa kamerani afzal ko'rish
-      const device = devices.find(d =>
-        d.label.toLowerCase().includes('back') ||
-        d.label.toLowerCase().includes('rear') ||
-        d.label.toLowerCase().includes('environment')
-      ) || devices[devices.length - 1];
+      const device =
+        devices.find(d =>
+          d.label.toLowerCase().includes('back') ||
+          d.label.toLowerCase().includes('rear') ||
+          d.label.toLowerCase().includes('environment')
+        ) || devices[devices.length - 1];
 
       setActive(true);
+      setLoading(false);
 
       controlsRef.current = await codeReader.decodeFromVideoDevice(
         device.deviceId,
         videoRef.current,
-        (result, error) => {
-          if (result) {
-            try {
-              const parsed = JSON.parse(result.getText());
-              if (parsed.sessionId && parsed.otp) {
-                onScan(parsed);
-                stop();
-              }
-            } catch {}
-          }
+        (result) => {
+          if (!result) return;
+          try {
+            const parsed = JSON.parse(result.getText());
+            if (parsed.sessionId && parsed.otp) {
+              onScan(parsed);
+              stop();
+            }
+          } catch {}
         }
       );
     } catch (e) {
-      setErr('Kamera ruxsati berilmadi yoki xatolik: ' + e.message);
+      setErr('Kamera xatoligi: ' + (e.message || e));
       setActive(false);
+      setLoading(false);
     }
-  };
-
-  const stop = () => {
-    if (controlsRef.current) {
-      controlsRef.current.stop();
-      controlsRef.current = null;
-    }
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-    }
-    setActive(false);
   };
 
   useEffect(() => () => stop(), []);
 
   return (
     <div>
-      {active && (
+      {/* Video har doim DOM da bo'lishi kerak, faqat ko'rinishi o'zgaradi */}
+      <div style={{
+        position: 'relative',
+        marginBottom: '1rem',
+        borderRadius: 12,
+        overflow: 'hidden',
+        border: '1px solid var(--border2)',
+        display: active ? 'block' : 'none',
+      }}>
+        <video
+          ref={videoRef}
+          style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
+          playsInline
+          muted
+          autoPlay
+        />
         <div style={{
-          position: 'relative', marginBottom: '1rem',
-          borderRadius: 12, overflow: 'hidden',
-          border: '1px solid var(--border2)',
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
         }}>
-          <video
-            ref={videoRef}
-            style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
-            playsInline
-            muted
-          />
-          {/* Scan frame */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none',
-          }}>
-            <div style={{ width: 180, height: 180, position: 'relative' }}>
-              {/* 4 burchak */}
-              {[
-                { top: 0, left: 0, borderTop: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '4px 0 0 0' },
-                { top: 0, right: 0, borderTop: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 4px 0 0' },
-                { bottom: 0, left: 0, borderBottom: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '0 0 0 4px' },
-                { bottom: 0, right: 0, borderBottom: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 0 4px 0' },
-              ].map((style, i) => (
-                <div key={i} style={{ position: 'absolute', width: 28, height: 28, ...style }} />
-              ))}
-              {/* Scan line */}
-              <div style={{
-                position: 'absolute', left: 0, right: 0, height: 2,
-                background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
-                animation: 'scanLine 1.8s linear infinite',
-              }} />
-            </div>
+          <div style={{ width: 180, height: 180, position: 'relative' }}>
+            {[
+              { top: 0, left: 0, borderTop: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '4px 0 0 0' },
+              { top: 0, right: 0, borderTop: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 4px 0 0' },
+              { bottom: 0, left: 0, borderBottom: '3px solid var(--accent)', borderLeft: '3px solid var(--accent)', borderRadius: '0 0 0 4px' },
+              { bottom: 0, right: 0, borderBottom: '3px solid var(--accent)', borderRight: '3px solid var(--accent)', borderRadius: '0 0 4px 0' },
+            ].map((s, i) => (
+              <div key={i} style={{ position: 'absolute', width: 28, height: 28, ...s }} />
+            ))}
+            <div style={{
+              position: 'absolute', left: 0, right: 0, height: 2,
+              background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
+              animation: 'scanLine 1.8s linear infinite',
+            }} />
           </div>
         </div>
-      )}
+      </div>
 
       {err && (
         <div style={{
           color: 'var(--red)', fontSize: '0.85rem', marginBottom: '0.75rem',
           padding: '10px', background: 'var(--red-dim)', borderRadius: 8,
           border: '1px solid rgba(255,92,92,0.2)',
-        }}>{err}</div>
+        }}>⚠️ {err}</div>
       )}
 
       <button
         onClick={active ? stop : start}
-        disabled={!active && disabled}
         style={{
           width: '100%', padding: '13px', borderRadius: '10px',
-          background: active ? 'var(--surface3)' : 'linear-gradient(135deg, #3b74e8, #6d4afe)',
+          background: active
+            ? 'var(--surface3)'
+            : loading
+              ? 'rgba(79,142,255,0.3)'
+              : 'linear-gradient(135deg, #3b74e8, #6d4afe)',
           color: '#fff', fontFamily: 'var(--font)', fontWeight: 600, fontSize: '0.95rem',
-          cursor: (!active && disabled) ? 'not-allowed' : 'pointer',
-          opacity: (!active && disabled) ? 0.5 : 1, transition: 'all 0.2s',
+          cursor: loading ? 'wait' : 'pointer',
+          transition: 'all 0.2s',
           border: active ? '1px solid var(--border2)' : 'none',
+          opacity: 1,
         }}
       >
-        {active ? '⏹ Kamerani o\'chirish' : '📷 Kamerani yoqish'}
+        {loading ? '⏳ Kamera yoqilmoqda...' : active ? '⏹ Kamerani o\'chirish' : '📷 Kamerani yoqish'}
       </button>
 
-      {!active && disabled && (
+      {disabled && !active && !loading && (
         <div style={{
           marginTop: 8, fontSize: '11px', fontFamily: 'var(--mono)',
           color: 'var(--text3)', textAlign: 'center',
