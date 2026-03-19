@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
-import { API, SOCKET } from '../config';
+import { API } from '../config';
 
 function Card({ children, style = {} }) {
   return (
@@ -184,7 +184,7 @@ export default function ClientPage() {
   const attend = async ({ sid, code, uname }) => {
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${API}/api/attend`, {
+      const res = await fetch(`${API}/api/session/attend`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sid.trim().toUpperCase(), otp: code.trim(), username: uname.trim() }),
       });
