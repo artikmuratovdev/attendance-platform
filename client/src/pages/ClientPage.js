@@ -259,7 +259,7 @@ export default function ClientPage() {
       await initConfig();
       const { API, SOCKET } = getConfig();
 
-      const res = await fetch(`${API}/api/session/attend`, {
+      const res = await fetch(`${API}/api/attend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

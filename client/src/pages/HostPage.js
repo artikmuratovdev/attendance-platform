@@ -324,7 +324,7 @@ export default function HostPage() {
     await initConfig();
     const { API, SOCKET } = getConfig();
 
-    const res = await fetch(`${API}/api/session/create`, {
+    const res = await fetch(`${API}/api/create`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, subject }),
     });
