@@ -36,8 +36,10 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
 
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 // Routes
-app.use('/api/session', sessionRoutes);
+app.use('/api', sessionRoutes);
 
 // Socket — io ni handlerlarga uzatish
 registerSocketHandlers(io);

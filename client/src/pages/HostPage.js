@@ -508,7 +508,7 @@ export default function HostPage() {
   }, []);
 
   const handleCreate = async (name, subject) => {
-    const res = await fetch(`${API}/api/session/create`, {
+    const res = await fetch(`${API}/api/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, subject }),
